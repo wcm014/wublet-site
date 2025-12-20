@@ -1,0 +1,22 @@
+---
+layout: default
+title: Saved Links
+---
+
+<h1>Saved Links</h1>
+
+<ul>
+  {% assign link_pages = site.pages | where_exp: "p", "p.path contains 'links/'" %}
+  {% assign sorted_links = link_pages | sort: "date" | reverse %}
+
+  {% for page in sorted_links %}
+    <li style="margin-bottom: 1.2em;">
+      <a href="{{ page.url | relative_url }}">
+        <strong>{{ page.title }}</strong>
+      </a>
+      <br>
+      <small>{{ page.date | date: "%B %-d, %Y" }}</small>
+      <p>{{ page.excerpt }}</p>
+    </li>
+  {% endfor %}
+</ul>
