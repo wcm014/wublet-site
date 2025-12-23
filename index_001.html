@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Wublet Links</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    max-width: 700px;
+    margin: 40px auto;
+    padding: 0 20px;
+  }
+  h1 { margin-bottom: 0.5em; }
+  .link-item {
+    padding: 12px 0;
+    border-bottom: 1px solid #ddd;
+  }
+  .date {
+    color: #666;
+    font-size: 0.9em;
+  }
+</style>
+</head>
+<body>
+
+<h1>Wublet Links</h1>
+<div id="links"></div>
+
+<script>
+// Adjust this to match your GitHub Pages repo URL
+const LINKS_DIR = '/links/';
+
+// Fetch directory listing (GitHub Pages exposes it as plain HTML)
+async function listMarkdownFiles() {
+  const res = await fetch(LINKS_DIR);
+  const text = await res.text();
+
+  // Extract .md filenames from directory listing
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(text, 'text/html');
+  const links = [...doc.querySelectorAll('a')]
+    .map(a => a.getAttribute('href'))
+    .filter(href => href && href.endsWith('.md'));
+
+  return links;
+}
+
+// Load and parse a single .md file
+async function loadMarkdownFile(filename) {
+  const res = await fetch(LINKS_DIR + filename);
+  const text = await res.text();
+
+  // Parse fields
+  const titleMatch = text.match(/title:\s*(.*)/);
+  const dateMatch = text.match(/date:\s*(.*)/);
+  const sourceMatch = text.match(/source:\s*(.*)/);
+
+  // Body URL = last non-empty line
+  const lines = text.trim().split('\n');
+  const url = lines[lines.length - 1].trim();
+
+  return {
+    title: titleMatch ? titleMatch[1].trim() : filename,
+    date: dateMatch ? new Date(dateMatch[1].trim()) : new Date(0),
+    source: sourceMatch ? sourceMatch[1].trim() : '',
+    url,
+  };
+}
+
+// Render links to page
+function renderLinks(items) {
+  const container = document.getElementById('links');
+  container.innerHTML = '';
+
+  items.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'link-item';
+
+    div.innerHTML = `
+      <a href="${item.url}" target="_blank">${item.title}</a><br>
+      <span class="date">${item.date.toLocaleString()}</span>
+    `;
+
+    container.appendChild(div);
+  });
+}
+
+// Main
+(async function () {
+  try {
+    const files = await listMarkdownFiles();
+    const items = await Promise.all(files.map(loadMarkdownFile));
+
+    // Sort newest first
+    items.sort((a, b) => b.date - a.date);
+
+    renderLinks(items);
+  } catch (err) {
+    console.error(err);
+    document.getElementById('links').innerText = 'Error loading links.';
+  }
+})();
+</script>
+
+</body>
+</html>
+
