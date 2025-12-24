@@ -27,18 +27,52 @@
 <div id="items">Loading…</div>
 
 <script>
-// GitHub repo info
+// ---------- CONFIG ----------
 const OWNER = 'wcm014';
 const REPO  = 'wublet-site';
 const PATH  = 'links';
 
+// ---------- HELPERS ----------
+function parseZapierDate(str) {
+  // Example: "12/23/25 09:44AM"
+  const match = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{2}) (\d{1,2}):(\d{2})(AM|PM)/);
+  if (!match) return new Date(0);
+
+  let [_, month, day, year, hour, minute, ampm] = match;
+
+  month = parseInt(month, 10) - 1;
+  day = parseInt(day, 10);
+  year = 2000 + parseInt(year, 10);
+  hour = parseInt(hour, 10);
+  minute = parseInt(minute, 10);
+
+  if (ampm === 'PM' && hour !== 12) hour += 12;
+  if (ampm === 'AM' && hour === 12) hour = 0;
+
+  return new Date(year, month, day, hour, minute);
+}
+
+// Find the first plausible URL in the entire text
+function extractFirstUrl(text) {
+  // Look for http/https followed by anything up to whitespace
+  const match = text.match(/https?:\/\/[^\s]+/);
+  if (!match) return '';
+
+  let url = match[0];
+
+  // Strip trailing characters that commonly ride along from email/markdown
+  url = url.replace(/[)"'\u201d\u201c]+$/g, '');
+
+  return url;
+}
+
+// ---------- GITHUB API ----------
 async function listMarkdownFiles() {
   const apiUrl = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}`;
   const res = await fetch(apiUrl);
   if (!res.ok) throw new Error('Failed to list files from GitHub API');
   const data = await res.json();
 
-  // Keep only .md files
   return data
     .filter(item => item.type === 'file' && item.name.endsWith('.md'))
     .map(item => ({
@@ -47,6 +81,7 @@ async function listMarkdownFiles() {
     }));
 }
 
+// ---------- FILE PARSING ----------
 async function loadMarkdownFile(file) {
   const res = await fetch(file.url);
   if (!res.ok) throw new Error(`Failed to fetch ${file.name}`);
@@ -56,19 +91,15 @@ async function loadMarkdownFile(file) {
   const dateMatch  = text.match(/date:\s*(.*)/);
 
   const title = titleMatch ? titleMatch[1].trim() : file.name;
-  //const dateStr = dateMatch ? dateMatch[1].trim() : '1970-01-01';
-  //const date = new Date(dateStr);
   const dateStr = dateMatch ? dateMatch[1].trim() : '01/01/70 00:00AM';
   const date = parseZapierDate(dateStr);
 
-  const lines = text.trim().split('\n').filter(l => l.trim().length > 0);
-  //const url = lines[lines.length - 1].trim();
-  const urlLine = lines[lines.length - 1].trim();
-  const url = extractUrl(urlLine);
+  const url = extractFirstUrl(text);
 
   return { title, date, url };
 }
 
+// ---------- RENDERING ----------
 function render(items) {
   const container = document.getElementById('items');
   container.innerHTML = '';
@@ -81,40 +112,22 @@ function render(items) {
   items.forEach(item => {
     const div = document.createElement('div');
     div.className = 'item';
+
+    const safeUrl = item.url || '#';
+
     div.innerHTML = `
-      <a href="${item.url}" target="_blank">${item.title}</a><br>
+      <a href="${safeUrl}" target="_blank" rel="noopener noreferrer">
+        ${item.title}
+      </a><br>
       <span class="date">${item.date.toLocaleString()}</span>
+      ${!item.url ? ' <span style="color:#b00;font-size:0.85em;">(no URL found)</span>' : ''}
     `;
+
     container.appendChild(div);
   });
 }
 
-function parseZapierDate(str) {
-  // Example: "12/23/25 09:44AM"
-  const match = str.match(/(\d{1,2})\/(\d{1,2})\/(\d{2}) (\d{1,2}):(\d{2})(AM|PM)/);
-  if (!match) return new Date(0); // fallback
-
-  let [_, month, day, year, hour, minute, ampm] = match;
-
-  month = parseInt(month, 10) - 1; // JS months are 0–11
-  day = parseInt(day, 10);
-  year = 2000 + parseInt(year, 10); // "25" → 2025
-
-  hour = parseInt(hour, 10);
-  minute = parseInt(minute, 10);
-
-  if (ampm === "PM" && hour !== 12) hour += 12;
-  if (ampm === "AM" && hour === 12) hour = 0;
-
-  return new Date(year, month, day, hour, minute);
-}
-
-// Extract the first valid URL from the line
-function extractUrl(line) {
-  const urlMatch = line.match(/https?:\/\/\S+/);
-  return urlMatch ? urlMatch[0].replace(/[)"']+$/, '') : '';
-}
-  
+// ---------- MAIN ----------
 (async function () {
   const container = document.getElementById('items');
   try {
