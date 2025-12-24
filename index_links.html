@@ -62,7 +62,9 @@ async function loadMarkdownFile(file) {
   const date = parseZapierDate(dateStr);
 
   const lines = text.trim().split('\n').filter(l => l.trim().length > 0);
-  const url = lines[lines.length - 1].trim();
+  //const url = lines[lines.length - 1].trim();
+  const urlLine = lines[lines.length - 1].trim();
+  const url = extractUrl(urlLine);
 
   return { title, date, url };
 }
@@ -107,6 +109,12 @@ function parseZapierDate(str) {
   return new Date(year, month, day, hour, minute);
 }
 
+// Extract the first valid URL from the line
+function extractUrl(line) {
+  const urlMatch = line.match(/https?:\/\/\S+/);
+  return urlMatch ? urlMatch[0].replace(/[)"']+$/, '') : '';
+}
+  
 (async function () {
   const container = document.getElementById('items');
   try {
