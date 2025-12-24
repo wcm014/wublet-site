@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Wublet Link Index</title>
+<title>Wublet Links</title>
 <style>
   body {
     font-family: system-ui, sans-serif;
@@ -27,65 +27,74 @@
 <div id="items">Loading…</div>
 
 <script>
-const LINKS_DIR = '/links/';
+// GitHub repo info
+const OWNER = 'wcm014';
+const REPO  = 'wublet-site';
+const PATH  = 'links';
 
-// Fetch directory listing
 async function listMarkdownFiles() {
-  const res = await fetch(LINKS_DIR);
-  const html = await res.text();
+  const apiUrl = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}`;
+  const res = await fetch(apiUrl);
+  if (!res.ok) throw new Error('Failed to list files from GitHub API');
+  const data = await res.json();
 
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-
-  return [...doc.querySelectorAll('a')]
-    .map(a => a.getAttribute('href'))
-    .filter(href => href && href.endsWith('.md'));
+  // Keep only .md files
+  return data
+    .filter(item => item.type === 'file' && item.name.endsWith('.md'))
+    .map(item => ({
+      name: item.name,
+      url: item.download_url
+    }));
 }
 
-// Parse a single .md file
-async function loadMarkdownFile(filename) {
-  const res = await fetch(LINKS_DIR + filename);
+async function loadMarkdownFile(file) {
+  const res = await fetch(file.url);
+  if (!res.ok) throw new Error(`Failed to fetch ${file.name}`);
   const text = await res.text();
 
-  const title = (text.match(/title:\s*(.*)/) || [,'(untitled)'])[1].trim();
-  const dateStr = (text.match(/date:\s*(.*)/) || [,'1970-01-01'])[1].trim();
+  const titleMatch = text.match(/title:\s*(.*)/);
+  const dateMatch  = text.match(/date:\s*(.*)/);
+
+  const title = titleMatch ? titleMatch[1].trim() : file.name;
+  const dateStr = dateMatch ? dateMatch[1].trim() : '1970-01-01';
   const date = new Date(dateStr);
-  const lines = text.trim().split('\n');
+
+  const lines = text.trim().split('\n').filter(l => l.trim().length > 0);
   const url = lines[lines.length - 1].trim();
 
   return { title, date, url };
 }
 
-// Render the list
 function render(items) {
   const container = document.getElementById('items');
   container.innerHTML = '';
 
+  if (!items.length) {
+    container.textContent = 'No links found yet.';
+    return;
+  }
+
   items.forEach(item => {
     const div = document.createElement('div');
     div.className = 'item';
-
     div.innerHTML = `
       <a href="${item.url}" target="_blank">${item.title}</a><br>
       <span class="date">${item.date.toLocaleString()}</span>
     `;
-
     container.appendChild(div);
   });
 }
 
-// Main
 (async function () {
+  const container = document.getElementById('items');
   try {
     const files = await listMarkdownFiles();
     const items = await Promise.all(files.map(loadMarkdownFile));
-
     items.sort((a, b) => b.date - a.date);
-
     render(items);
   } catch (err) {
     console.error(err);
-    document.getElementById('items').innerText = 'Error loading links.';
+    container.textContent = 'Error loading links.';
   }
 })();
 </script>
